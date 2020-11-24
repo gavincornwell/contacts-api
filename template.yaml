@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Deploys the Contacts API
+
+Globals:
+  Function:
+    Runtime: python3.8
+    MemorySize: 512
+    Timeout: 30
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref ContactsTable
+
+Resources:
+
+  # DynamoDB table for storing contacts
+
+  ContactsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - 
+          AttributeName: contactId
+          AttributeType: S
+        - 
+          AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - 
+          AttributeName: contactId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: ContactByEmail
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # REST API definition
+
+  RestApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: dev
+      # DefinitionBody:
+      #   'Fn::Transform':
+      #     Name: 'AWS::Include'
+      #     Parameters:
+      #       Location: './api.yaml'
+
+  # Lambda functions
+
+  APIPostContactLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/api/post_contact
+      Handler: post_contact.lambda_handler
+      Description: Handles the POST /contacts API request
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: DynamoPut
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt ContactsTable.Arn
+      Events:
+        PostResource:
+          Type: Api
+          Properties:
+            RestApiId: !Ref RestApi
+            Path: /contacts
+            Method: post
+
+  APIListContactsLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/api/list_contacts
+      Handler: list_contacts.lambda_handler
+      Description: Handles the GET /contacts API request
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: DynamoScan
+              Effect: Allow
+              Action:
+                - dynamodb:Scan
+              Resource: !GetAtt ContactsTable.Arn
+      Events:
+        PostResource:
+          Type: Api
+          Properties:
+            RestApiId: !Ref RestApi
+            Path: /contacts
+            Method: get
+
+  APIGetContactLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/api/get_contact
+      Handler: get_contact.lambda_handler
+      Description: Handles the GET /contacts/{id} API request
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: DynamoGetItem
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt ContactsTable.Arn
+      Events:
+        PostResource:
+          Type: Api
+          Properties:
+            RestApiId: !Ref RestApi
+            Path: /contacts/{id}
+            Method: get
+
+  EventContactsTableStreamLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/event_listeners/contacts_table_stream
+      Handler: contacts_table_stream.lambda_handler
+      Description: Processes the DynamoDB stream of the Contacts table
+      Events:
+        Stream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt ContactsTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 5
+            BisectBatchOnFunctionError: true
+            MaximumRetryAttempts: 3
+            MaximumBatchingWindowInSeconds: 10
+            MaximumRecordAgeInSeconds: 60
+
+Outputs:
+
+  ApiBaseUrl:
+    Description: The base URL of the API
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/dev"

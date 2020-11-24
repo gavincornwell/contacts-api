@@ -127,3 +127,13 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# SAM
+.aws-sam
+samconfig.toml
+
+# VS Code
+.vscode
+
+# Mac
+.DS_Store
