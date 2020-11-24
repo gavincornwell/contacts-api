@@ -36,7 +36,11 @@ def lambda_handler(event, context):
     try:
 
         # scan dynamodb table for all results
-        response = {}
+        _logger.debug('Calling scan on table %s', TABLE_NAME)
+        response = _dynamodb.scan(
+            TableName=TABLE_NAME
+        )
+        _logger.debug('scan response: %s', response)
 
         # build response body and return
         body = _build_response_body(response)
@@ -63,4 +67,23 @@ def lambda_handler(event, context):
 def _build_response_body(response):
     """Builds a dictionary representing the response body"""
 
-    return {}
+    items = {
+        'data': []
+    }
+
+    for item in response['Items']:
+        items['data'].append(_build_contact(item))
+
+    return items
+
+
+def _build_contact(item):
+    """Builds a dictionary representing a contact"""
+
+    contact = {
+        'contactId': item['contactId']['S'],
+        'name': item['name']['S'],
+        'telephone': item['telephone']['S']
+    }
+
+    return contact
