@@ -1,6 +1,6 @@
 # Contacts API
 
-Serverless backed API for a contacts database
+Serverless backend API for a contacts database
 
 ## Prerequisites
 
